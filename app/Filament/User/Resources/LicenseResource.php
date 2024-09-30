@@ -46,9 +46,18 @@ class LicenseResource extends Resource
             ->schema([
                 Select::make('type_id')
                     ->label('License Type')
-                    ->options(fn () => LicenseType::all()->pluck('name', 'id'))
+                    ->options(function (callable $get) {
+                        return LicenseType::all()->pluck('name', 'id');
+                    })
                     ->searchable()
-                    ->reactive(),
+                    ->reactive()
+                    ->afterStateUpdated(function (callable $set, $state, $get) {
+                        $licenseName = LicenseType::find($state)?->duration; // Retrieve the name corresponding to the selected id
+
+                        $expiryDate = app(Core::class)->licenceDuration($licenseName);
+                        $set('expiry_date', $expiryDate->format('Y-m-d'));
+                    })
+                    ->required(),
 
                 TextInput::make('key')
                     ->label('License Key')
@@ -60,6 +69,16 @@ class LicenseResource extends Resource
                     ->required()
                     ->url()
                     ->placeholder('https://teendev.dev'),
+
+                TextInput::make('expiry_date')
+                    ->default(function ($state){
+                        $licenseType= $state['type_id']  ?? 'enterprise';
+                        return app(Core::class)->licenceDuration($licenseType);
+
+                    })
+                    ->readOnly()
+                    ->extraInputAttributes(['readonly'=>true])
+                    ->required(),
 
                 Hidden::make('user_id')
                     ->default(fn () => Auth::user()->id),
